@@ -1,0 +1,40 @@
+2025-08-14 15:21:41 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:21:47 - TradingSystem - INFO - 키움 API 연결 중...
+2025-08-14 15:21:52 - TradingSystem - INFO - 실시간 데이터 등록 성공: 3개 종목
+2025-08-14 15:21:52 - TradingSystem - INFO -   - 005930: 삼성전자
+2025-08-14 15:21:52 - TradingSystem - INFO -   - 000660: SK하이닉스
+2025-08-14 15:21:52 - TradingSystem - INFO -   - 035420: NAVER
+2025-08-14 15:21:52 - TradingSystem - INFO - 자동매매 시작
+2025-08-14 15:24:41 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:24:42 - TradingSystem - INFO - 키움 API 연결 중...
+2025-08-14 15:24:47 - TradingSystem - INFO - 실시간 데이터 등록 성공: 3개 종목
+2025-08-14 15:24:47 - TradingSystem - INFO -   - 005930: 삼성전자
+2025-08-14 15:24:47 - TradingSystem - INFO -   - 000660: SK하이닉스
+2025-08-14 15:24:47 - TradingSystem - INFO -   - 035420: NAVER
+2025-08-14 15:24:47 - TradingSystem - INFO - 자동매매 시작
+2025-08-14 15:30:59 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:31:02 - TradingSystem - INFO - 키움 API 연결 중...
+2025-08-14 15:31:06 - TradingSystem - INFO - 실시간 데이터 등록 성공: 3개 종목
+2025-08-14 15:31:06 - TradingSystem - INFO -   - 005930: 삼성전자
+2025-08-14 15:31:06 - TradingSystem - INFO -   - 000660: SK하이닉스
+2025-08-14 15:31:06 - TradingSystem - INFO -   - 035420: NAVER
+2025-08-14 15:31:06 - TradingSystem - INFO - 자동매매 시작
+2025-08-14 15:43:04 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:43:37 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:44:07 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:44:46 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:44:57 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:53:34 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:53:36 - TradingSystem - INFO - 키움 API 연결 중...
+2025-08-14 15:53:41 - TradingSystem - INFO - 실시간 데이터 등록 성공: 3개 종목
+2025-08-14 15:53:41 - TradingSystem - INFO -   - 005930: 삼성전자
+2025-08-14 15:53:41 - TradingSystem - INFO -   - 000660: SK하이닉스
+2025-08-14 15:53:41 - TradingSystem - INFO -   - 035420: NAVER
+2025-08-14 15:53:41 - TradingSystem - INFO - 자동매매 시작 - test 모드
+2025-08-14 15:54:21 - TradingSystem - INFO - 전략 로드됨: RSI_Strategy
+2025-08-14 15:54:22 - TradingSystem - INFO - 키움 API 연결 중...
+2025-08-14 15:54:26 - TradingSystem - INFO - 실시간 데이터 등록 성공: 3개 종목
+2025-08-14 15:54:26 - TradingSystem - INFO -   - 005930: 삼성전자
+2025-08-14 15:54:26 - TradingSystem - INFO -   - 000660: SK하이닉스
+2025-08-14 15:54:26 - TradingSystem - INFO -   - 035420: NAVER
+2025-08-14 15:54:26 - TradingSystem - INFO - 자동매매 시작 - test 모드
