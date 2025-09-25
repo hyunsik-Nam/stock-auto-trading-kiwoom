@@ -52,6 +52,7 @@ class LoginTest(QAxWidget):
                 print(f"❌ 사용자 정보 조회 오류: {e}")
         else:
             print(f"❌ 로그인 실패: {err_code}")
+            
         
         if self.login_event_loop:
             self.login_event_loop.exit()
