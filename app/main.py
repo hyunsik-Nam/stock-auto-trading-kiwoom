@@ -28,7 +28,7 @@ app.include_router(kiwoom.router, prefix="/api/v1/kiwoom", tags=["키움 증권"
 @app.get("/")
 def root():
     return {
-        "message": "🚀 전체 프로젝트가 실행되고 있습니다!",
+        "message": "🚀 전체 프로젝트가 실행되고 있습니다!!!",
         "available_endpoints": {
             "kiwoom": "/api/v1/kiwoom"
         },
