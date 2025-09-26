@@ -9,6 +9,8 @@ from app.router import kiwoom_router as kiwoom
 from app.components.kiwoom_component import kiwoomComponent
 import logging
 
+from app.utils.logging_utils import safePrint
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -16,7 +18,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """애플리케이션 생명주기 관리"""
     logger.info("🚀 FastAPI 애플리케이션 시작")
-    print("🚀 FastAPI 애플리케이션 시작")
+    safePrint("🚀 FastAPI 애플리케이션 시작")
     
     # 키움 로그인을 백그라운드에서 실행
     asyncio.create_task(autoLoginKiwoom())
@@ -32,11 +34,11 @@ async def autoLoginKiwoom():
         await asyncio.sleep(2)
         
         logger.info("키움 API 자동 로그인 시작")
-        print("키움 API 자동 로그인 시작")
+        safePrint("키움 API 자동 로그인 시작")
         
         await kiwoomComponent.login()
         logger.info("✅ 키움 API 자동 로그인 성공")
-        print("✅ 키움 API 자동 로그인 성공")
+        safePrint("✅ 키움 API 자동 로그인 성공")
 
     except Exception as e:
         logger.error(f"❌ 키움 API 초기화 중 오류: {e}")
@@ -79,5 +81,5 @@ def health():
 
 # 직접 실행 지원
 if __name__ == "__main__":
-    print("🚀 Spring Boot 스타일 FastAPI 서버 시작...")
+    safePrint("🚀 Spring Boot 스타일 FastAPI 서버 시작...")
     uvicorn.run(app, host="127.0.0.1", port=8000, reload=True)
