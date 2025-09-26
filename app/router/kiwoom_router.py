@@ -3,7 +3,9 @@ from supabase import Client
 from typing import List, Optional, Dict, Any
 from app.database.supabase import get_supabase_client
 from app.service.kiwoom_service import KiwoomService
+from app.utils.logging_utils import setupLogging, safePrint
 
+logger = setupLogging()
 router = APIRouter()
 
 def get_finance_service(supabase: Client = Depends(get_supabase_client)) -> KiwoomService:
@@ -16,7 +18,7 @@ async def getStockInfo(
 ) -> Dict[str, Any]:
     """주식 정보 조회"""
     try:
-        print(f"📊 주식 정보 조회 요청: {symbol}")
+        logger.info(f"📊 주식 정보 조회 요청: {symbol}")
         
         result = await service.get_stock_info(symbol.upper())
         
@@ -35,7 +37,7 @@ async def getStockInfo(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ 주식 정보 조회 오류: {e}")
+        logger.info(f"❌ 주식 정보 조회 오류: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"주식 정보 조회 중 오류가 발생했습니다: {str(e)}"

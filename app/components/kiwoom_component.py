@@ -6,6 +6,9 @@ from PyQt5.QAxContainer import QAxWidget
 from PyQt5.QtCore import QEventLoop, QTimer
 import uuid
 import time
+from app.utils.logging_utils import setupLogging
+
+logger = setupLogging()
 
 class TrRequestManager:
     """TR 요청 관리자"""
@@ -138,7 +141,7 @@ class KiwoomComponent(QAxWidget):
             if app is None:
                 cls._qApplication = QApplication(sys.argv)
                 cls._qApplication.setQuitOnLastWindowClosed(False)
-                print("✅ QApplication 초기화 완료")
+                logger.info("✅ QApplication 초기화 완료")
             else:
                 cls._qApplication = app
 
@@ -146,7 +149,7 @@ class KiwoomComponent(QAxWidget):
         if not self._initialized:
             super().__init__()
             try:
-                self._logger = logging.getLogger(__name__)
+                self._logger = logger
                 self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
                 self.OnEventConnect.connect(self._eventConnect)
                 self.OnReceiveTrData.connect(self._receiveTrData)
