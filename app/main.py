@@ -6,7 +6,7 @@ import asyncio
 
 # 모든 라우터 임포트 (Spring Boot의 Controller 스캔과 같음)
 from app.router import kiwoom_router as kiwoom
-from app.components.kiwoom_component import kiwoomComponent
+from app.components.kiwoom_component import kiwoom_component
 import logging
 
 from app.utils.logging_utils import safePrint
@@ -36,7 +36,7 @@ async def autoLoginKiwoom():
         logger.info("키움 API 자동 로그인 시작")
         safePrint("키움 API 자동 로그인 시작")
         
-        await kiwoomComponent.login()
+        await kiwoom_component.login()
         logger.info("✅ 키움 API 자동 로그인 성공")
         safePrint("✅ 키움 API 자동 로그인 성공")
 
