@@ -35,6 +35,8 @@ def setupLogging() -> logging.Logger:
     """로깅 시스템 초기화"""
     logger = logging.getLogger('kiwoom_app')
     logger.setLevel(logging.INFO)
+    logger.propagate = False
+
     
     # 기존 핸들러 제거
     for handler in logger.handlers[:]:
