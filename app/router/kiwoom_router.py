@@ -45,10 +45,13 @@ async def get_stock_info(
     
 @router.post("/order")
 async def order_stock(
+    screen_name: str,
     symbol: str, 
     quantity: int, 
     price: float, 
-    order_type: str,  # 'buy' or 'sell'
+    order_type: int,  # 'buy' or 'sell'
+    hoga_gb: str,
+    s_org_order_no: str = "",
     service: KiwoomService = Depends(get_finance_service)
 ) -> Dict[str, Any]:
     """주식 주문 처리"""
@@ -56,10 +59,13 @@ async def order_stock(
         logger.info(f"📡 주식 주문 요청: {order_type} {quantity} {symbol} at {price}")
         
         order_result = await service.order_stock(
+            screen_name,
             symbol,
             quantity,
             price,
-            order_type
+            order_type,
+            hoga_gb,
+            s_org_order_no
         )
 
         if "error" in order_result:

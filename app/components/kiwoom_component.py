@@ -17,41 +17,52 @@ class OrderManager:
     
     def __init__(self):
         self._pending_orders: Dict[str, Dict[str, Any]] = {}
-        self._order_queue: asyncio.Queue = asyncio.Queue()
-        self._order_lock: asyncio.Lock = asyncio.Lock()
-        self._max_concurrent_orders = 5  # 동시 처리 가능한 주문 수
-        self._current_orders = 0
+        self._screen_counter = 2000
+        # self._order_queue: asyncio.Queue = asyncio.Queue()
+        # self._order_lock: asyncio.Lock = asyncio.Lock()
+        # self._max_concurrent_orders = 5  # 동시 처리 가능한 주문 수
+        # self._current_orders = 0
         
-    def create_order_request(self, order_data: Dict[str, Any]) -> str:
+    def create_order_request(self, code: str) -> Dict[str, Any]:
         """주문 요청 생성"""
         order_id = f"ORDER_{uuid.uuid4().hex[:8]}"
         
-        self._pending_orders[order_id] = {
+                # 고유 스크린 번호 생성
+        screen_no = str(self._screen_counter)
+
+        self._screen_counter += 1
+        if self._screen_counter > 9999:
+            self._screen_counter = 2000
+
+        return {
             "order_id": order_id,
-            "order_data": order_data,
+            "screen_no": screen_no,
+            "code": code,
             "timestamp": time.time(),
+            "event_loop": QEventLoop(),
+            "timeout_timer": QTimer(),
             "status": "pending",
-            "result": None,
-            "future": asyncio.Future()
+            "completed": False,
+            "result": None
         }
-        
-        return order_id
     
-    async def submit_order(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
-        """주문 제출 - 비동기 처리"""
-        order_id = self.create_order_request(order_data)
-        order_request = self._pending_orders[order_id]
+    # async def submit_order(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
+    #     """주문 제출 - 비동기 처리"""
+    #     order_id = self.create_order_request(order_data)
+    #     order_request = self._pending_orders[order_id]
+    #     logger.info(f"주문 요청 생성: {order_id} - {order_data}")
+    #     # 주문 큐에 추가
+    #     await self._order_queue.put(order_request)
         
-        # 주문 큐에 추가
-        await self._order_queue.put(order_request)
-        
-        # 결과 대기
-        try:
-            result = await order_request["future"]
-            return result
-        except Exception as e:
-            logger.error(f"주문 처리 오류: {e}")
-            return {"error": str(e), "order_id": order_id}
+    #     logger.info(f"주문 큐에 추가됨: {order_id}")
+    #     # 결과 대기
+    #     try:
+    #         result = await order_request["future"]
+    #         logger.info(f"주문 처리 완료: {order_id} - {result}")
+    #         return result
+    #     except Exception as e:
+    #         logger.error(f"주문 처리 오류: {e}")
+    #         return {"error": str(e), "order_id": order_id}
     
     def complete_order(self, order_id: str, result: Dict[str, Any]) -> None:
         """주문 완료 처리"""
@@ -79,6 +90,7 @@ class TrRequestManager:
     def __init__(self):
         self._pending_requests: Dict[str, Dict[str, Any]] = {}
         self._tr_configs: Dict[str, Dict[str, Any]] = self._init_tr_configs()
+        self._screen_counter = 1000
     
     def _init_tr_configs(self) -> Dict[str, Dict[str, Any]]:
         """TR 설정 초기화 - 키움 공식 문서 기준"""
@@ -153,21 +165,31 @@ class TrRequestManager:
             },
         }
     
-    def create_request(self, tr_code: str, inputs: Dict[str, str], 
+    def create_request(self, request_id: str,tr_code: str, inputs: Dict[str, str], 
                      callback: Optional[Callable] = None) -> str:
         """TR 요청 생성"""
-        request_id = f"{tr_code}_{uuid.uuid4().hex[:8]}"
         
-        self._pending_requests[request_id] = {
+        request_id = f"{tr_code}_{uuid.uuid4().hex[:8]}"
+
+        # 고유 스크린 번호 생성
+        screen_no = str(self._screen_counter)
+
+        self._screen_counter += 1
+        if self._screen_counter > 9999:
+            self._screen_counter = 1000
+
+        return {
+            "request_id": request_id,
             "tr_code": tr_code,
+            "screen_no": screen_no,
             "inputs": inputs,
             "callback": callback,
             "timestamp": time.time(),
+            "event_loop": QEventLoop(),
+            "timeout_timer": QTimer(),
             "completed": False,
             "result": None
         }
-        
-        return request_id
     
     def complete_request(self, request_id: str, result: Dict[str, Any]) -> None:
         """요청 완료 처리"""
@@ -250,9 +272,11 @@ class KiwoomComponent(QAxWidget):
                 self._timeout_timer: Optional[QTimer] = None
                 self._user_info: Dict[str, str] = {}
                 self._order_results: Dict[str, Dict[str, Any]] = {}
+                self._pending_tr_requests: Dict[str, Dict[str, Any]] = {}  # 요청 매핑 테이블 추가
+                self._pending_orders: Dict[str, Dict[str, Any]] = {}  # 주문 매핑 테이블 추가
                 
                 # 주문 처리 워커 시작
-                asyncio.create_task(self._order_processor())
+                # asyncio.create_task(self._order_processor())
                 
                 KiwoomComponent._initialized = True
                 self._logger.info("키움 API 컨트롤 초기화 성공")
@@ -292,8 +316,12 @@ class KiwoomComponent(QAxWidget):
     async def _execute_order(self, order_request: Dict[str, Any]) -> Dict[str, Any]:
         """실제 주문 실행"""
         order_data = order_request["order_data"]
-        
+        order_id = order_request["order_id"]
+
         try:
+            result_future = asyncio.Future()
+            self._logger.info(f"result_future {result_future}")
+
             # SendOrder 호출 (동기 메서드)
             ret = self.SendOrder(
                 order_data["screen_name"],
@@ -309,35 +337,18 @@ class KiwoomComponent(QAxWidget):
             
             if ret == 0:
                 self._logger.info(f"주문 전송 성공: {order_data['code']}, {order_data['qty']}주")
-                
-                # 주문 결과 대기 (최대 10초)
-                order_id = order_request["order_id"]
-                timeout = 10
-                start_time = time.time()
-                
-                while time.time() - start_time < timeout:
-                    if order_id in self._order_results:
-                        result = self._order_results[order_id]
-                        del self._order_results[order_id]  # 메모리 정리
-                        return {
-                            "success": True,
-                            "order_id": order_id,
-                            "message": "주문이 성공적으로 접수되었습니다",
-                            "order_result": result
-                        }
-                    await asyncio.sleep(0.1)
-                
-                # 타임아웃 시 기본 성공 응답
+
                 return {
-                    "success": True,
-                    "order_id": order_id,
-                    "message": "주문이 접수되었습니다 (결과 확인 중)",
-                    "return_code": ret
-                }
+                        "success": True,
+                        "order_id": order_id,
+                        "message": "주문이 접수되었습니다",
+                        "return_code": ret
+                    }
             else:
+                error_msg = self._get_error_message(ret)
                 return {
                     "success": False,
-                    "error": f"주문 전송 실패 코드: {ret}",
+                    "error": f"주문 전송 실패: {error_msg} (코드: {ret})",
                     "return_code": ret
                 }
                 
@@ -346,8 +357,23 @@ class KiwoomComponent(QAxWidget):
                 "success": False,
                 "error": f"주문 실행 오류: {str(e)}"
             }
+        
 
-    async def login(self) -> bool:
+    def _get_error_message(self, error_code: int) -> str:
+        """키움 API 에러 코드를 한국어 메시지로 변환"""
+        error_messages = {
+            -200: "시세조회 과부하",
+            -201: "REQUEST_INPUT_st Failed", 
+            -202: "시세조회 초과 200회",
+            -203: "주문조회 초과",
+            -300: "주문전송 실패",
+            -301: "계좌비밀번호 없음",
+            -302: "타이틀 없음",
+            -308: "주문전송 과부하"
+        }
+        return error_messages.get(error_code, f"알 수 없는 오류 (코드: {error_code})")
+    
+    def login(self) -> bool:
         """키움 API 로그인"""
         try:
             self._logger.info("키움 API 로그인 시작")
@@ -408,7 +434,7 @@ class KiwoomComponent(QAxWidget):
     async def request_tr(self, tr_code: str, inputs: Dict[str, str], 
                        callback: Optional[Callable] = None, 
                        timeout: int = 10) -> Optional[Dict[str, Any]]:
-        """범용 TR 요청 메서드"""
+        """개선된 TR 요청 메서드 - 고유 식별자 사용"""
         try:
             if not self._is_connected:
                 self._logger.error("키움 API에 로그인되지 않음")
@@ -418,78 +444,64 @@ class KiwoomComponent(QAxWidget):
             for key, value in inputs.items():
                 self.dynamicCall("SetInputValue(QString, QString)", key, value)
             
-            # 요청 생성
-            self._current_request_id = self._tr_manager.create_request(tr_code, inputs, callback)
             
-            # 이벤트 루프 및 타이머 설정
-            self._request_event_loop = QEventLoop()
-            self._timeout_timer = QTimer()
-            self._timeout_timer.setSingleShot(True)
-            self._timeout_timer.timeout.connect(self._on_request_timeout)
-            self._timeout_timer.start(timeout * 1000)
+            # 요청 정보 저장
+            request_info = self._tr_manager.create_request(tr_code, inputs, callback)
+
+            # {
+            #     "request_id": unique_id,
+            #     "tr_code": tr_code,
+            #     "screen_no": screen_no,
+            #     "inputs": inputs,
+            #     "callback": callback,
+            #     "timestamp": time.time(),
+            #     "event_loop": QEventLoop(),
+            #     "timeout_timer": QTimer(),
+            #     "completed": False,
+            #     "result": None
+            # }
             
-            # TR 요청
-            screen_no = f"{int(time.time()) % 10000:04d}"
+            # 요청 매핑 테이블에 저장
+            self._pending_tr_requests[request_info.get("request_id")] = request_info
+            
+            # 타이머 설정
+            request_info["timeout_timer"].setSingleShot(True)
+            request_info["timeout_timer"].timeout.connect(
+                lambda: self._handle_tr_timeout(request_info.get("request_id"))
+            )
+            request_info["timeout_timer"].start(timeout * 1000)
+            
+            # TR 요청 전송
             ret = self.dynamicCall(
                 "CommRqData(QString, QString, int, QString)",
-                self._current_request_id,
+                request_info.get("request_id"),  # 고유 요청 ID 사용
                 tr_code,
                 "0",
-                screen_no
+                request_info.get("screen_no")
             )
-
-            self._logger.info(f"ret : {ret}")
             
             if ret == 0:
-                self._logger.info(f"{tr_code} 요청 성공, 응답 대기 중...")
-                self._request_event_loop.exec_()
+                self._logger.info(f"{tr_code} 요청 전송 성공: {request_info.get('request_id')}")
                 
-                # 타이머 정리
-                if self._timeout_timer:
-                    self._timeout_timer.stop()
-                    self._timeout_timer = None
+                # 이벤트 루프에서 대기
+                request_info["event_loop"].exec_()
                 
                 # 결과 반환
-                request = self._tr_manager.get_request(self._current_request_id)
-                return request["result"] if request else None
+                result = request_info.get("result")
+                self._cleanup_tr_request(request_info.get("request_id"))
+                return result
             else:
                 self._logger.error(f"{tr_code} 요청 실패: {ret}")
+                self._cleanup_tr_request(request_info.get("request_id"))
                 return None
                 
         except Exception as e:
             self._logger.error(f"TR 요청 오류: {e}")
+            if 'request_info' in locals():
+                self._cleanup_tr_request(request_info.get("request_id"))
             return None
-        finally:
-            self._current_request_id = None
-            if self._timeout_timer:
-                self._timeout_timer.stop()
-                self._timeout_timer = None
 
-    def _receive_msg(self, screen_no: str, rq_name: str, tr_code: str, msg: str) -> None:
-        """주문 메시지 수신 이벤트"""
-        self._logger.info(f"주문 메시지: {msg} (화면번호: {screen_no})")
-        
-        # 주문 결과를 대기 중인 주문에 연결
-        for order_id, order_data in self._order_manager._pending_orders.items():
-            if order_data["order_data"]["screen_no"] == screen_no:
-                self._order_results[order_id] = {"message": msg, "screen_no": screen_no}
-                break
 
-    def _receive_chejan_data(self, gubun: str, item_cnt: int, fid_list: str) -> None:
-        """체결 데이터 수신 이벤트"""
-        try:
-            if gubun == "0":  # 주문체결
-                order_no = self.dynamicCall("GetChejanData(int)", 9203)
-                stock_code = self.dynamicCall("GetChejanData(int)", 9001)
-                stock_name = self.dynamicCall("GetChejanData(int)", 302)
-                order_status = self.dynamicCall("GetChejanData(int)", 913)
-                order_qty = self.dynamicCall("GetChejanData(int)", 900)
-                order_price = self.dynamicCall("GetChejanData(int)", 901)
-                
-                self._logger.info(f"주문체결: {stock_name}({stock_code}) {order_status} {order_qty}주 {order_price}원")
-                
-        except Exception as e:
-            self._logger.error(f"체결 데이터 처리 오류: {e}")
 
     def _on_request_timeout(self) -> None:
         """요청 타임아웃 처리"""
@@ -498,69 +510,89 @@ class KiwoomComponent(QAxWidget):
             self._request_event_loop.exit()
 
     def _receive_tr_data(self, screen_no, rq_name, tr_code, record_name, prev_next, data_len, err_code, msg1, msg2):
-        """범용 TR 데이터 수신 처리"""
+        """개선된 TR 데이터 수신 처리 - 고유 ID 매핑"""
         try:
-            # err_code 처리
-            error_code = 0
-            if isinstance(err_code, str):
-                error_code = int(err_code) if err_code.strip() else 0
-            else:
-                error_code = int(err_code)
+            self._logger.info(f"TR 응답 수신: rq_name={rq_name}, tr_code={tr_code}, screen_no={screen_no}")
             
-            if error_code != 0:
-                self._logger.error(f"TR 에러 코드: {error_code}, 메시지: {msg1}")
+            # 요청 매핑 테이블에서 해당 요청 찾기
+            request_info = self._pending_tr_requests.get(rq_name)
+
+            self._logger.info(f"@@@@ {self._pending_orders}")
+            if request_info :
+                request_info = self._pending_orders.get(rq_name)
+            
+            if not request_info:
+                self._logger.warning(f"매핑되지 않은 TR 응답: {rq_name}")
                 return
             
-            self._logger.info(f"TR 데이터 수신: {rq_name} ({tr_code})")
+            # 이미 완료된 요청인지 확인
+            if request_info["completed"]:
+                self._logger.warning(f"이미 완료된 요청의 중복 응답: {rq_name}")
+                return
             
-            # 데이터 추출
-            raw_data = self._extract_raw_data(tr_code, record_name)
-            self._logger.info(f"raw_data : {raw_data}")
+            # 에러 코드 확인
+            error_code = int(err_code) if isinstance(err_code, str) and err_code.strip() else int(err_code or 0)
             
-            # 원시 데이터 디버깅
-            # self._logger.info("원시 데이터 샘플:")
-            # for key, value in list(raw_data.items())[:5]:
-            #     self._logger.info(f"  {key}: '{value}'")
-            
-            # 데이터 파싱
-            # parsed_data = self._tr_manager.parse_data(tr_code, raw_data)
+            if error_code != 0:
+                self._logger.error(f"TR 에러 - 요청: {rq_name}, 코드: {error_code}, 메시지: {msg1}")
+                request_info["result"] = {"error": f"TR 에러: {error_code} - {msg1}"}
+            else:
+                # 데이터 추출 및 파싱
+                raw_data = self._extract_raw_data(tr_code, record_name or "")
+                
+                request_info["result"] = raw_data
+                self._logger.info(f"TR 데이터 처리 완료: {rq_name}")
             
             # 요청 완료 처리
-            self._logger.info(f"현재 요청 ID: {self._current_request_id}")
-            self._logger.info(f"rq_name: {rq_name}")
+            request_info["completed"] = True
             
-            if self._current_request_id and rq_name == self._current_request_id:
-                self._logger.info(f"현재 요청 ID: {self._current_request_id}")
-                self._logger.info(f"rq_name: {rq_name}")
-
-                self._tr_manager.complete_request(self._current_request_id, raw_data)
+            # 콜백 실행
+            if request_info["callback"]:
+                try:
+                    request_info["callback"](request_info["result"])
+                except Exception as e:
+                    self._logger.error(f"콜백 실행 오류: {e}")
             
-            # 주요 데이터만 로깅
-            # if tr_code == "opt10001":
-            #     stock_name = parsed_data.get('종목명', '')
-            #     current_price = parsed_data.get('현재가', 0)
-            #     change_rate = parsed_data.get('등락률', 0.0)
-            #     self._logger.info(f"{stock_name}: {current_price:,}원 ({change_rate:+.2f}%)")
-            
+            # 이벤트 루프 종료
+            if request_info["event_loop"].isRunning():
+                request_info["event_loop"].exit()
+                
         except Exception as e:
             self._logger.error(f"TR 데이터 처리 오류: {e}")
-        finally:
-            if self._request_event_loop and self._request_event_loop.isRunning():
-                self._request_event_loop.exit()
+            # 에러 발생 시에도 이벤트 루프 종료
+            if rq_name in self._pending_tr_requests:
+                request_info = self._pending_tr_requests[rq_name]
+                if request_info["event_loop"].isRunning():
+                    request_info["event_loop"].exit()
+
+    def _handle_tr_timeout(self, request_id: str) -> None:
+        """TR 요청 타임아웃 처리"""
+        self._logger.warning(f"TR 요청 타임아웃: {request_id}")
+        
+        request_info = self._pending_tr_requests.get(request_id)
+        if request_info and not request_info["completed"]:
+            request_info["result"] = {"error": "요청 타임아웃"}
+            request_info["completed"] = True
+            
+            if request_info["event_loop"].isRunning():
+                request_info["event_loop"].exit()
+    
+    def _cleanup_tr_request(self, request_id: str) -> None:
+        """TR 요청 정리"""
+        request_info = self._pending_tr_requests.get(request_id)
+        if request_info:
+            # 타이머 정리
+            if request_info["timeout_timer"]:
+                request_info["timeout_timer"].stop()
+            
+            # 매핑 테이블에서 제거
+            del self._pending_tr_requests[request_id]
+            self._logger.debug(f"TR 요청 정리 완료: {request_id}")
 
     def _extract_raw_data(self, tr_code: str, record_name: str) -> Dict[str, str]:
         """원시 데이터 추출 - 모든 가능한 필드 추출"""
         raw_data = []
         
-        # opt10001의 경우 정확한 필드명 사용
-        # if tr_code == "opt10001":
-        #     field_names = [
-        #         "종목명", "현재가", "기준가", "전일종가", "시가", "고가", "저가",
-        #         "상한가", "하한가", "전일대비", "등락률", "거래량", "거래대금",
-        #         "액면가", "시가총액", "상장주수", "PER", "EPS", "ROE", "PBR"
-        #     ]
-        # else:
-        # 다른 TR의 경우 설정에서 가져오기
         config = self._tr_manager._tr_configs.get(tr_code, {})
         self._logger.info(f"config {config}")
         field_names = list(config.get("outputs", {}).keys())
@@ -618,7 +650,218 @@ class KiwoomComponent(QAxWidget):
             self._logger.error(f"코스피 종목 조회 오류: {e}")
             return None
 
-    async def send_order(self, screen_name: str, screen_no: str, acc_no: str, 
+
+
+    def send_order_sync(self, screen_name: str, acc_no: str, 
+                       order_type: int, code: str, qty: int, price: int, 
+                       hoga_gb: str, org_order_no: str, timeout: int = 10) -> Dict[str, Any]:
+        """동기식 주문 전송 - QEventLoop로 결과 대기"""
+        try:
+            if not self._is_connected:
+                return {"success": False, "error": "키움 API에 로그인되지 않았습니다"}
+
+            # 고유 주문 ID 생성
+            # order_id = f"ORDER_{uuid.uuid4().hex[:8]}"
+            
+            # # 이벤트 루프 및 타이머 설정
+            # event_loop = QEventLoop()
+            # timeout_timer = QTimer()
+            
+            # self._order_event_loops[order_id] = event_loop
+            # self._order_timeouts[order_id] = timeout_timer
+            
+            # 주문 매핑 정보 저장
+            order_mapping = self._order_manager.create_order_request(code)
+            # {
+            #     "order_id": order_id,
+            #     "screen_no": screen_no,
+            #     "code": code,
+            #     "event_loop": event_loop,
+            #     "timeout_timer": timeout_timer,
+            #     "completed": False,
+            #     "result": None
+            # }
+            self._logger.info(f"order_mapping {order_mapping}")
+            self._logger.info(f"order_mapping {order_mapping.get('order_id')}")
+            self._logger.info(f"order_mapping {order_mapping['order_id']}")
+            self._pending_orders[order_mapping.get('order_id')] = order_mapping
+            
+            # 타임아웃 설정
+            order_mapping.get('timeout_timer').setSingleShot(True)
+            order_mapping.get('timeout_timer').timeout.connect(lambda: self._handle_order_timeout(order_mapping.get('order_id')))
+            order_mapping.get('timeout_timer').start(timeout * 1000)
+
+            self._logger.info(f"주문 전송: {code} {qty}주, 주문ID: {order_mapping.get('order_id')}")
+
+            self._logger.info(f"screen_name: {screen_name}, screen_no: {order_mapping.get('screen_no')}, acc_no: {acc_no}, order_type: {order_type}, code: {code}, qty: {qty}, price: {price}, hoga_gb: {hoga_gb}, org_order_no: {org_order_no}")
+            # SendOrder 호출
+            ret = self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)", 
+                [screen_name, order_mapping.get('screen_no'), acc_no, order_type, code, qty, price, hoga_gb, org_order_no]
+            )
+            self._logger.info(f"ret {ret}")
+            
+            if ret == 0:
+                self._logger.info(f"주문 전송 성공 - 결과 대기 중: {order_mapping.get('order_id')}")
+                
+                # QEventLoop로 결과 대기
+                order_mapping['event_loop'].exec_()
+
+                self._logger.info(f"이벤트루프 종료")
+
+                # 결과 반환
+                self._logger.info(f"order_mapping {order_mapping}")
+                result = order_mapping.get("result", {"error": "결과 없음"})
+                self._cleanup_order_request(order_mapping.get('order_id'))
+                return result
+                
+            else:
+                error_msg = self._get_error_message(ret)
+                self._cleanup_order_request(order_mapping.get('order_id'))
+                return {
+                    "success": False,
+                    "error": f"주문 전송 실패: {error_msg} (코드: {ret})",
+                    "return_code": ret
+                }
+                
+        except Exception as e:
+            self._logger.error(f"주문 전송 오류: {e}")
+            if 'order_mapping' in locals():
+                self._cleanup_order_request(order_mapping.get('order_id'))
+            return {"success": False, "error": str(e)}
+        
+    def _receive_msg(self, screen_no: str, rq_name: str, tr_code: str, msg: str) -> None:
+        """주문 메시지 수신 - QEventLoop 종료 처리"""
+        self._logger.info(f"📨 주문 메시지: {msg} (화면번호: {screen_no})")
+        self._logger.info(f"_pending_orders: {self._pending_orders}")
+        
+
+        # 해당 화면번호의 주문 찾기
+        for order_id, order_info in self._pending_orders.items():
+            self._logger.info("@@1")
+            self._logger.info(f"@@1 {order_id}")
+            self._logger.info(f"@@1 {order_info}")
+            self._logger.info(f"@@1 {order_info.get('screen_no')}")
+            self._logger.info(f"@@1 {screen_no}")
+            if (order_info.get("screen_no") == screen_no and 
+                not order_info.get("completed", False)):
+                
+
+                self._logger.info("@@2")
+                # 결과 저장
+                result = {
+                    "success": True,
+                    "order_id": order_id,
+                    "type": "message",
+                    "message": msg,
+                    "screen_no": screen_no,
+                    "timestamp": time.time()
+                }
+                order_info["result"] = result
+                order_info["completed"] = True
+                
+                # QEventLoop 종료
+                event_loop = order_info["event_loop"]
+                if event_loop and event_loop.isRunning():
+                    event_loop.exit()
+                    self._logger.info(f"✅ 주문 메시지 수신 완료: {order_id}")
+                
+                break
+
+    def _receive_chejan_data(self, gubun: str, item_cnt: int, fid_list: str) -> None:
+        """체결 데이터 수신 - QEventLoop 종료 처리"""
+        try:
+            self._logger.info(f"🔥 체결 데이터 수신! 구분: {gubun}")
+            
+            if gubun == "0":  # 주문체결
+                # 체결 데이터 추출
+                order_no = self._safe_get_chejan_data(9203, "주문번호")
+                stock_code = self._safe_get_chejan_data(9001, "종목코드")
+                stock_name = self._safe_get_chejan_data(302, "종목명")
+                order_status = self._safe_get_chejan_data(913, "주문상태")
+                order_qty = self._safe_get_chejan_data(900, "주문수량")
+                order_price = self._safe_get_chejan_data(901, "주문가격")
+                exec_qty = self._safe_get_chejan_data(911, "체결수량")
+                exec_price = self._safe_get_chejan_data(910, "체결가")
+                
+                self._logger.info(f"체결 정보: {stock_name}({stock_code}) {order_status} {exec_qty}주 @ {exec_price}원")
+                
+                # 해당 종목의 주문 찾기
+                for order_id, order_info in self._pending_orders.items():
+                    if (order_info.get("code") == stock_code and 
+                        not order_info.get("completed", False)):
+                        
+                        # 체결 결과 저장
+                        result = {
+                            "success": True,
+                            "order_id": order_id,
+                            "type": "chejan",
+                            "order_no": order_no,
+                            "stock_code": stock_code,
+                            "stock_name": stock_name,
+                            "order_status": order_status,
+                            "order_qty": order_qty,
+                            "order_price": order_price,
+                            "exec_qty": exec_qty,
+                            "exec_price": exec_price,
+                            "timestamp": time.time()
+                        }
+                        order_info["result"] = result
+                        order_info["completed"] = True
+                        
+                        # QEventLoop 종료
+                        event_loop = order_info["event_loop"]
+                        if event_loop and event_loop.isRunning():
+                            event_loop.exit()
+                            self._logger.info(f"✅ 체결 데이터 수신 완료: {order_id}")
+                        
+                        break
+                        
+        except Exception as e:
+            self._logger.error(f"체결 데이터 처리 오류: {e}")
+
+    def _safe_get_chejan_data(self, fid: int, field_name: str) -> str:
+        """안전한 체결 데이터 추출"""
+        try:
+            value = self.dynamicCall("GetChejanData(int)", fid)
+            return str(value).strip() if value else ""
+        except Exception as e:
+            self._logger.warning(f"{field_name}({fid}) 추출 실패: {e}")
+            return ""
+
+    def _handle_order_timeout(self, order_id: str) -> None:
+        """주문 타임아웃 처리"""
+        self._logger.warning(f"주문 결과 대기 타임아웃: {order_id}")
+        
+        order_info = self._pending_orders.get(order_id)
+        if order_info and not order_info.get("completed", False):
+            # 타임아웃 결과 설정
+            result = {
+                "success": True,
+                "order_id": order_id,
+                "message": "주문이 접수되었습니다 (결과 확인 중)",
+                "timeout": True,
+                "timestamp": time.time()
+            }
+            order_info["result"] = result
+            order_info["completed"] = True
+            
+            # QEventLoop 종료
+            event_loop = order_info["event_loop"]
+            if event_loop and event_loop.isRunning():
+                event_loop.exit()
+
+    def _cleanup_order_request(self, order_id: str) -> None:
+        """주문 요청 정리"""
+        order_info = self._pending_orders.get(order_id)
+        if order_info:
+            if order_info.get("timeout_timer"):
+                order_info.get("timeout_timer").stop()
+            
+            # 매핑 테이블에서 제거
+            del self._pending_orders[order_id]
+            self._logger.debug(f"주문 요청 정리 완료: {order_id}")
+
+    async def send_order(self, screen_name: str, acc_no: str, 
                         order_type: int, code: str, qty: int, price: int, 
                         hoga_gb: str, org_order_no: str) -> Dict[str, Any]:
         """비동기 주식 주문 전송"""
@@ -626,21 +869,34 @@ class KiwoomComponent(QAxWidget):
             if not self._is_connected:
                 return {"success": False, "error": "키움 API에 로그인되지 않았습니다"}
             
-            order_data = {
-                "screen_name": screen_name,
-                "screen_no": screen_no,
-                "acc_no": acc_no,
-                "order_type": order_type,
-                "code": code,
-                "qty": qty,
-                "price": price,
-                "hoga_gb": hoga_gb,
-                "org_order_no": org_order_no
-            }
-            
-            # 비동기 주문 제출
-            result = await self._order_manager.submit_order(order_data)
+            # loop = asyncio.get_event_loop()
+            # result = await loop.run_in_executor(
+            #     None,  # 기본 ThreadPoolExecutor 사용
+            #     self.send_order_sync,
+            #     screen_name, screen_no, acc_no, order_type, 
+            #     code, qty, price, hoga_gb, org_order_no
+            # )
+
+            result = self.send_order_sync(screen_name, acc_no, order_type, code, qty, price, hoga_gb, org_order_no)
+            self._logger.info(f"send_order result {result}")
             return result
+        
+            # order_data = {
+            #     "screen_name": screen_name,
+            #     "screen_no": screen_no,
+            #     "acc_no": acc_no,
+            #     "order_type": order_type,
+            #     "code": code,
+            #     "qty": qty,
+            #     "price": price,
+            #     "hoga_gb": hoga_gb,
+            #     "org_order_no": org_order_no
+            # }
+
+            # self._pending_orders[order_id] = order_data
+            # # 비동기 주문 제출
+            # result = await self._order_manager.submit_order(order_data)
+            # return result
             
         except Exception as e:
             self._logger.error(f"주문 전송 오류: {e}")

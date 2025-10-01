@@ -19,14 +19,14 @@ class KiwoomService:
         if not self._kiwoom.is_connected:
             return {"error": "키움증권 API에 연결되지 않았습니다. 먼저 로그인을 해주세요."}
         
-        stockCode = self._kiwoom.get_stock_kospi(symbol)
-        if not stockCode:
+        stock_code = self._kiwoom.get_stock_kospi(symbol)
+        if not stock_code:
             return {"error": f"종목 '{symbol}'을 찾을 수 없습니다."}
         
-        stock_info = await self._kiwoom.get_stock_info(stockCode)
+        stock_info = await self._kiwoom.get_stock_info(stock_code)
         return stock_info
     
-    async def order_stock(self, symbol: str, quantity: int, price: int, orderType: str) -> Dict[str, Any]:
+    async def order_stock(self, screen_name: str, symbol: str, quantity: int, price: int, order_type: int, hoga_gb: str, s_org_order_no: str) -> Dict[str, Any]:
         """주식 주문 처리"""
         try:
             # 연결 상태 확인
@@ -34,8 +34,8 @@ class KiwoomService:
                 return {"error": "키움증권 API에 연결되지 않았습니다. 먼저 로그인을 해주세요."}
             
             # 종목코드 조회
-            stockCode = self._kiwoom.get_stock_kospi(symbol)
-            if not stockCode:
+            stock_code = self._kiwoom.get_stock_kospi(symbol)
+            if not stock_code:
                 return {"error": f"종목 '{symbol}'을 찾을 수 없습니다."}
             
             # 계좌 정보 확인
@@ -43,66 +43,56 @@ class KiwoomService:
             if not accountList:
                 return {"error": "사용 가능한 계좌가 없습니다."}
             
-            primaryAccount = accountList[0]
-            self._logger.info(f"주문 계좌: {primaryAccount}")
+            primary_account = accountList[0]
+            self._logger.info(f"주문 계좌: {primary_account}")
             
             # 주문 실행 (동기 메서드이므로 await 제거)
-            if orderType == 'buy':
                 # 거래시간 확인
-                current_time = datetime.now()
-                is_market_open = self._kiwoom._is_market_open(current_time)
+            current_time = datetime.now()
+            is_market_open = self._kiwoom._is_market_open(current_time)
 
-                if is_market_open.get("status") and is_market_open.get("is_open"):
-                    # 장중 거래 - 지정가 주문
-                    hoga_gb = "00"  # 지정가
-                    screen_name = "주식매수"
-                elif is_market_open.get("status") and not is_market_open.get("is_open"):
-                    # 장외 거래 - 시간외 단일가 주문
-                    hoga_gb = "61"  # 시간외단일가
-                    screen_name = "시간외매수"
-                else:
-                    return {"error": "현재는 거래 시간이 아닙니다. 거래 시간 내에 주문해 주세요."}
+            # if is_market_open.get("status") and is_market_open.get("is_open"):
+            #     # 장중 거래 - 지정가 주문
+            #     if hoga_gb != "00":
+            #         return {"error": "시간외 거래는 불가능합니다."}
+            # elif is_market_open.get("status") and not is_market_open.get("is_open"):
+            #     # 장외 거래 - 시간외 단일가 주문
+            #     if hoga_gb != "61":
+            #         return {"error": "장중 거래 시간입니다."}
 
-                self._logger.info(f"거래시간 구분: {'장중' if is_market_open else '장외'}, 호가구분: {hoga_gb}")
-                result = await self._kiwoom.send_order(
-                    screen_name=screen_name,
-                    screen_no="0101",
-                    acc_no=primaryAccount,
-                    order_type=1,  # 신규매수
-                    code=stockCode,
-                    qty=quantity,
-                    price=price,
-                    hoga_gb=hoga_gb,  # 지정가
-                    org_order_no=""
-                )
-            elif orderType == 'sell':
-                result = await self._kiwoom.send_order(
-                    screen_name="주식매도",
-                    screen_no="0102", 
-                    acc_no=primaryAccount,
-                    order_type=2,  # 신규매도
-                    code=stockCode,
-                    qty=quantity,
-                    price=price,
-                    hoga_gb=hoga_gb,
-                    org_order_no=""
-                )
-            else:
-                return {"error": "orderType은 'buy' 또는 'sell'이어야 합니다."}
+            #     screen_name = f"시간외{screen_name}"
+            # else:
+            #     return {"error": "현재는 거래 시간이 아닙니다. 거래 시간 내에 주문해 주세요."}
+
+            self._logger.info(f"거래시간 구분: {'장중' if is_market_open else '장외'}, 호가구분: {hoga_gb}")
+            result = await self._kiwoom.send_order(
+                screen_name=screen_name,
+                acc_no=primary_account,
+                order_type=order_type, 
+                code=stock_code,
+                qty=quantity,
+                price=price,
+                hoga_gb=hoga_gb,  # 지정가
+                org_order_no=s_org_order_no
+            )
+
+            self._logger.info(f"주문 결과: {result}")
+            # else:
+            #     return {"error": "order_type은 'buy' 또는 'sell'이어야 합니다."}
             
             # 결과 처리
-            if result.get("return_code") == 0:
+            if result.get("success", True):
                 return {
                     "success": True, 
-                    "message": f"{symbol} 주식 {orderType} 주문이 접수되었습니다.",
+                    "message": result.get("message"),
                     "orderResult": result,
-                    "stockCode": stockCode,
+                    "stock_code": stock_code,
                     "quantity": quantity,
                     "price": price
                 }
             else:
                 return {
-                    "error": f"주문 실패 코드: {result.get('return_code')}",
+                    "error": f"주문 실패 ",
                     "orderResult": result
                 }
         
@@ -188,14 +178,16 @@ class KiwoomService:
                 screenName="주문취소",
                 screenNo="0103",
                 accNo=target_account,
-                orderType=3,  # 취소
+                order_type=3,  # 취소
                 code="",      # 취소시에는 종목코드 불필요
                 qty=0,        # 취소시에는 수량 불필요  
                 price=0,      # 취소시에는 가격 불필요
                 hogaGb="00",
                 orgOrderNo=orderNo  # 원주문번호
             )
-            
+
+            self._logger.info(f"주문 취소 결과: {result}")
+
             if result.get("success", False):
                 return {
                     "success": True,
@@ -281,7 +273,7 @@ class KiwoomService:
                     "주문번호": orderData.get("주문번호", ""),
                     "종목코드": orderData.get("종목코드", "").strip(),
                     "종목명": orderData.get("종목명", "").strip(),
-                    "주문구분": self._getOrderTypeName(orderData.get("주문구분", "")),
+                    "주문구분": self._getorder_typeName(orderData.get("주문구분", "")),
                     "체결수량": self._parseInteger(orderData.get("체결수량", "0")),
                     "체결가격": self._parseInteger(orderData.get("체결가격", "0")),
                     "체결금액": self._parseInteger(orderData.get("체결금액", "0")),

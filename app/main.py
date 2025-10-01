@@ -36,7 +36,7 @@ async def autoLoginKiwoom():
         logger.info("키움 API 자동 로그인 시작")
         safePrint("키움 API 자동 로그인 시작")
         
-        await kiwoom_component.login()
+        kiwoom_component.login()
         logger.info("✅ 키움 API 자동 로그인 성공")
         safePrint("✅ 키움 API 자동 로그인 성공")
 
