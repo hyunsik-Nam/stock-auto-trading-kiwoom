@@ -84,50 +84,73 @@ class TrRequestManager:
         """TR 설정 초기화 - 키움 공식 문서 기준"""
         return {
             "opt10001": {
-                "name": "주식기본정보",
-                "inputs": ["종목코드"],
-                "outputs": {
-                    "종목명": str,
-                    "현재가": int,
-                    "기준가": int,
-                    "전일종가": int,
-                    "시가": int,
-                    "고가": int,
-                    "저가": int,
-                    "상한가": int,
-                    "하한가": int,
-                    "전일대비": int,
-                    "등락률": float,
-                    "거래량": int,
-                    "거래대금": int,
-                    "액면가": int,
-                    "시가총액": int,
-                    "상장주수": int,
-                    "PER": float,
-                    "EPS": int,
-                    "ROE": float,
-                    "PBR": float,
-                    "EV": float,
-                    "BPS": int,
-                    "매출액": int,
-                    "영업이익": int,
-                    "당기순이익": int,
-                    "250최고": int,
-                    "250최저": int,
-                    "시가총액규모": str,
-                    "지수업종대분류": str,
-                    "지수업종중분류": str,
-                    "지수업종소분류": str,
-                    "제조업": str,
-                    "매출액증가율": float,
-                    "영업이익증가율": float,
-                    "순이익증가율": float,
-                    "ROE증가율": float,
-                    "매출액적자": str,
-                    "영업이익적자": str,
-                    "순이익적자": str
-                }
+            "name": "주식기본정보",
+            "inputs": ["종목코드"],
+            "outputs": {
+                "종목명": str,
+                "현재가": int,
+                "기준가": int,
+                "전일종가": int,
+                "시가": int,
+                "고가": int,
+                "저가": int,
+                "상한가": int,
+                "하한가": int,
+                "전일대비": int,
+                "등락률": float,
+                "거래량": int,
+                "거래대금": int,
+                "액면가": int,
+                "시가총액": int,
+                "상장주수": int,
+                "PER": float,
+                "EPS": int,
+                "ROE": float,
+                "PBR": float,
+                "EV": float,
+                "BPS": int,
+                "매출액": int,
+                "영업이익": int,
+                "당기순이익": int,
+                "250최고": int,
+                "250최저": int,
+                "시가총액규모": str,
+                "지수업종대분류": str,
+                "지수업종중분류": str,
+                "지수업종소분류": str,
+                "제조업": str,
+                "매출액증가율": float,
+                "영업이익증가율": float,
+                "순이익증가율": float,
+                "ROE증가율": float,
+                "매출액적자": str,
+                "영업이익적자": str,
+                "순이익적자": str
             }
+            },
+            "opt10075": {
+            "name": "미체결요청",
+            "inputs": ["계좌번호", "체결구분", "매매구분"],
+            "outputs": {
+                "계좌번호": str,
+                "주문번호": str,
+                "종목코드": str,
+                "주문상태": str,
+                "종목명": str,
+                "업무구분": str,
+                "주문구분": str,
+                "주문가격": int,
+                "주문수량": int,
+                "시간": str,
+                "미체결수량": int,
+                "체결가": int,
+                "체결량": int,
+                "현재가": int,
+                "매매구분": str,
+                "단위체결가": int,
+                "단위체결량": int,
+            }
+            },
         }
     
     def create_request(self, tr_code: str, inputs: Dict[str, str], 
@@ -411,9 +434,11 @@ class KiwoomComponent(QAxWidget):
                 "CommRqData(QString, QString, int, QString)",
                 self._current_request_id,
                 tr_code,
-                0,
+                "0",
                 screen_no
             )
+
+            self._logger.info(f"ret : {ret}")
             
             if ret == 0:
                 self._logger.info(f"{tr_code} 요청 성공, 응답 대기 중...")
@@ -490,25 +515,32 @@ class KiwoomComponent(QAxWidget):
             
             # 데이터 추출
             raw_data = self._extract_raw_data(tr_code, record_name)
+            self._logger.info(f"raw_data : {raw_data}")
             
             # 원시 데이터 디버깅
-            self._logger.info("원시 데이터 샘플:")
-            for key, value in list(raw_data.items())[:5]:
-                self._logger.info(f"  {key}: '{value}'")
+            # self._logger.info("원시 데이터 샘플:")
+            # for key, value in list(raw_data.items())[:5]:
+            #     self._logger.info(f"  {key}: '{value}'")
             
             # 데이터 파싱
-            parsed_data = self._tr_manager.parse_data(tr_code, raw_data)
+            # parsed_data = self._tr_manager.parse_data(tr_code, raw_data)
             
             # 요청 완료 처리
+            self._logger.info(f"현재 요청 ID: {self._current_request_id}")
+            self._logger.info(f"rq_name: {rq_name}")
+            
             if self._current_request_id and rq_name == self._current_request_id:
-                self._tr_manager.complete_request(self._current_request_id, parsed_data)
+                self._logger.info(f"현재 요청 ID: {self._current_request_id}")
+                self._logger.info(f"rq_name: {rq_name}")
+
+                self._tr_manager.complete_request(self._current_request_id, raw_data)
             
             # 주요 데이터만 로깅
-            if tr_code == "opt10001":
-                stock_name = parsed_data.get('종목명', '')
-                current_price = parsed_data.get('현재가', 0)
-                change_rate = parsed_data.get('등락률', 0.0)
-                self._logger.info(f"{stock_name}: {current_price:,}원 ({change_rate:+.2f}%)")
+            # if tr_code == "opt10001":
+            #     stock_name = parsed_data.get('종목명', '')
+            #     current_price = parsed_data.get('현재가', 0)
+            #     change_rate = parsed_data.get('등락률', 0.0)
+            #     self._logger.info(f"{stock_name}: {current_price:,}원 ({change_rate:+.2f}%)")
             
         except Exception as e:
             self._logger.error(f"TR 데이터 처리 오류: {e}")
@@ -518,38 +550,49 @@ class KiwoomComponent(QAxWidget):
 
     def _extract_raw_data(self, tr_code: str, record_name: str) -> Dict[str, str]:
         """원시 데이터 추출 - 모든 가능한 필드 추출"""
-        raw_data = {}
+        raw_data = []
         
         # opt10001의 경우 정확한 필드명 사용
-        if tr_code == "opt10001":
-            field_names = [
-                "종목명", "현재가", "기준가", "전일종가", "시가", "고가", "저가",
-                "상한가", "하한가", "전일대비", "등락률", "거래량", "거래대금",
-                "액면가", "시가총액", "상장주수", "PER", "EPS", "ROE", "PBR"
-            ]
-        else:
-            # 다른 TR의 경우 설정에서 가져오기
-            config = self._tr_manager._tr_configs.get(tr_code, {})
-            field_names = list(config.get("outputs", {}).keys())
+        # if tr_code == "opt10001":
+        #     field_names = [
+        #         "종목명", "현재가", "기준가", "전일종가", "시가", "고가", "저가",
+        #         "상한가", "하한가", "전일대비", "등락률", "거래량", "거래대금",
+        #         "액면가", "시가총액", "상장주수", "PER", "EPS", "ROE", "PBR"
+        #     ]
+        # else:
+        # 다른 TR의 경우 설정에서 가져오기
+        config = self._tr_manager._tr_configs.get(tr_code, {})
+        self._logger.info(f"config {config}")
+        field_names = list(config.get("outputs", {}).keys())
         
-        actual_record_name = record_name if record_name.strip() else ""
-        
-        for field_name in field_names:
-            try:
-                value = self.dynamicCall(
-                    "CommGetData(QString, QString, QString, int, QString)",
-                    tr_code, "", actual_record_name, 0, field_name
-                ).strip()
-                raw_data[field_name] = value
-                
-                # 디버깅: 주요 필드 원시값 출력
-                if field_name in ["종목명", "현재가", "전일대비", "등락률"]:
-                    self._logger.debug(f"  원시 {field_name}: '{value}'")
-                    
-            except Exception as e:
-                self._logger.warning(f"{field_name} 데이터 추출 실패: {e}")
-                raw_data[field_name] = ""
-        
+        nCnt = self.dynamicCall("GetRepeatCnt(QString, QString)", tr_code, "");
+        self._logger.info(f"nCnt : {nCnt}")
+
+        for i in range(max(1, nCnt)):
+            for field_name in field_names:
+                try:
+                    value = self.dynamicCall(
+                        "GetCommData(QString, QString, int, QString)",
+                        str(tr_code),
+                        str(record_name) if record_name else "", 
+                        int(i), 
+                        str(field_name)
+                    )
+                    self._logger.info(f"field_name : {field_name}, tr_code : {tr_code}, record_name : {record_name}")
+                    self._logger.info(f"value : {value}")
+                        # None 체크 및 문자열 정제
+                    clean_value = value.strip() if value else ""
+
+                    # 배열 형태로 데이터 구성
+                    while len(raw_data) <= i:
+                        raw_data.append({})
+
+                    raw_data[i][field_name] = clean_value
+                        
+                except Exception as e:
+                    self._logger.warning(f"{field_name} 데이터 추출 실패: {e}")
+                    raw_data[f"{field_name}_{i}"] = ""
+
         return raw_data
 
     # 편의 메서드들

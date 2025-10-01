@@ -138,12 +138,17 @@ class KiwoomService:
             # opt10075 TR 요청 (실시간 미체결 요청)
             trInputs = {
                 "계좌번호": targetAccount,
+                "종목구분": "0",
+                "매매구분": "0",   # 0: 전체, 1: 매도, 2: 매수
+                "종목코드" : "",
                 "체결구분": "1",  # 0: 전체, 1: 미체결, 2: 체결
-                "매매구분": "0"   # 0: 전체, 1: 매도, 2: 매수
+                "거래소구분": "0"
             }
             
             rawData = await self._kiwoom.request_tr("opt10075", trInputs)
             
+            self._logger.info(f"미체결 주문 rawData: {rawData}")
+
             if not rawData:
                 return {
                     "success": True,
@@ -152,93 +157,17 @@ class KiwoomService:
                     "totalCount": 0
                 }
             
-            # 미체결 주문 데이터 파싱
-            pending_orders = self._parse_pending_orders(rawData)
-            
             return {
                 "success": True,
-                "message": f"미체결 주문 {len(pending_orders)}건을 조회했습니다.",
-                "orders": pending_orders,
-                "totalCount": len(pending_orders),
+                "message": f"미체결 주문 {len(rawData)}건을 조회했습니다.",
+                "orders": rawData,
+                "totalCount": len(rawData),
                 "accountNo": targetAccount
             }
             
         except Exception as e:
             self._logger.error(f"미체결 주문 조회 오류: {e}")
             return {"error": f"미체결 주문 조회 중 오류가 발생했습니다: {str(e)}"}
-    
-    def _parse_pending_orders(self, rawData: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """미체결 주문 데이터 파싱"""
-        try:
-            orders = []
-            
-            # rawData가 리스트 형태인지 단일 딕셔너리인지 확인
-            if isinstance(rawData, dict):
-                rawData = [rawData]
-            
-            for orderData in rawData:
-                if not orderData:
-                    continue
-                
-                # 주문 정보 파싱
-                order = {
-                    "주문번호": orderData.get("주문번호", ""),
-                    "종목코드": orderData.get("종목코드", "").strip(),
-                    "종목명": orderData.get("종목명", "").strip(),
-                    "주문구분": self._getOrderTypeName(orderData.get("주문구분", "")),
-                    "주문수량": self._parseInteger(orderData.get("주문수량", "0")),
-                    "주문가격": self._parseInteger(orderData.get("주문가격", "0")),
-                    "미체결수량": self._parseInteger(orderData.get("미체결수량", "0")),
-                    "체결수량": self._parseInteger(orderData.get("체결수량", "0")),
-                    "현재가": self._parseInteger(orderData.get("현재가", "0")),
-                    "주문상태": orderData.get("주문상태", "").strip(),
-                    "주문시간": orderData.get("주문시간", "").strip(),
-                    "원주문번호": orderData.get("원주문번호", ""),
-                }
-                
-                # 수익률 계산
-                if order["주문가격"] > 0 and order["현재가"] > 0:
-                    if order["주문구분"] == "매수":
-                        order["수익률"] = round(((order["현재가"] - order["주문가격"]) / order["주문가격"]) * 100, 2)
-                    else:  # 매도
-                        order["수익률"] = round(((order["주문가격"] - order["현재가"]) / order["현재가"]) * 100, 2)
-                else:
-                    order["수익률"] = 0.0
-                
-                # 미체결 금액 계산
-                order["미체결금액"] = order["미체결수량"] * order["주문가격"]
-                
-                orders.append(order)
-            
-            # 주문시간 기준 내림차순 정렬 (최신 주문이 먼저)
-            orders.sort(key=lambda x: x["주문시간"], reverse=True)
-            
-            return orders
-            
-        except Exception as e:
-            self._logger.error(f"미체결 주문 파싱 오류: {e}")
-            return []
-    
-    def _getOrderTypeName(self, orderType: str) -> str:
-        """주문구분 코드를 한국어명으로 변환"""
-        orderTypeMap = {
-            "1": "매도",
-            "2": "매수", 
-            "+매도": "매도",
-            "+매수": "매수",
-            "-매도": "매도취소",
-            "-매수": "매수취소"
-        }
-        return orderTypeMap.get(orderType.strip(), orderType)
-    
-    def _parseInteger(self, value: str) -> int:
-        """문자열을 정수로 안전하게 변환"""
-        try:
-            # 키움 API 특성: +/- 부호, 콤마 제거
-            cleanValue = str(value).replace(",", "").replace("+", "").strip()
-            return int(cleanValue) if cleanValue and cleanValue != "-" else 0
-        except (ValueError, TypeError):
-            return 0
     
     async def cancel_order(self, orderNo: str, accountNo: Optional[str] = None) -> Dict[str, Any]:
         """주문 취소"""
