@@ -29,9 +29,7 @@ async def get_stock_info(
             )
         
         return {
-            "success": True,
-            "data": result,
-            "message": f"{symbol} 주식 정보 조회 성공"
+            "data": result
         }
         
     except HTTPException:
@@ -77,8 +75,7 @@ async def order_stock(
         logger.info(f"✅ 주식 주문 성공: {order_result}")
         
         return {
-            "success": True,
-            "data": order_result,
+            "data": order_result
         }
         
     except HTTPException:
@@ -101,9 +98,7 @@ async def get_pending_orders(
         orders = await service.get_pending_orders()
         
         return {
-            "success": True,
-            "data": orders,
-            "message": "미체결 주문 조회 성공"
+            "data": orders
         }
         
     except Exception as e:
@@ -134,9 +129,7 @@ async def cancel_order(
         logger.info(f"✅ 주문 취소 성공: {cancel_result}")
         
         return {
-            "success": True,
-            "data": cancel_result,
-            "message": f"주문 {orderNo} 취소가 성공적으로 접수되었습니다."
+            "data": cancel_result
         }
         
     except HTTPException:

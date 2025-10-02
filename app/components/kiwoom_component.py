@@ -257,7 +257,6 @@ class KiwoomComponent(QAxWidget):
         if not self._initialized:
             super().__init__()
             try:
-                self._logger = logger
                 self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
                 self.OnEventConnect.connect(self._event_connect)
                 self.OnReceiveTrData.connect(self._receive_tr_data)
@@ -279,85 +278,11 @@ class KiwoomComponent(QAxWidget):
                 # asyncio.create_task(self._order_processor())
                 
                 KiwoomComponent._initialized = True
-                self._logger.info("키움 API 컨트롤 초기화 성공")
+                logger.info("키움 API 컨트롤 초기화 성공")
             except Exception as e:
-                self._logger.error(f"키움 API 컨트롤 초기화 실패: {e}")
+                logger.error(f"키움 API 컨트롤 초기화 실패: {e}")
                 raise
 
-    async def _order_processor(self) -> None:
-        """주문 처리 워커 - 백그라운드에서 주문 큐 처리"""
-        while True:
-            try:
-                # 주문 큐에서 주문 요청 가져오기
-                order_request = await self._order_manager._order_queue.get()
-                
-                # 동시 주문 수 제한 확인
-                async with self._order_manager._order_lock:
-                    if self._order_manager._current_orders >= self._order_manager._max_concurrent_orders:
-                        await asyncio.sleep(0.1)  # 잠시 대기
-                        continue
-                    
-                    self._order_manager._current_orders += 1
-                
-                # 주문 실행
-                try:
-                    result = await self._execute_order(order_request)
-                    self._order_manager.complete_order(order_request["order_id"], result)
-                except Exception as e:
-                    self._order_manager.fail_order(order_request["order_id"], str(e))
-                finally:
-                    async with self._order_manager._order_lock:
-                        self._order_manager._current_orders -= 1
-                
-            except Exception as e:
-                self._logger.error(f"주문 처리 워커 오류: {e}")
-                await asyncio.sleep(1)
-
-    async def _execute_order(self, order_request: Dict[str, Any]) -> Dict[str, Any]:
-        """실제 주문 실행"""
-        order_data = order_request["order_data"]
-        order_id = order_request["order_id"]
-
-        try:
-            result_future = asyncio.Future()
-            self._logger.info(f"result_future {result_future}")
-
-            # SendOrder 호출 (동기 메서드)
-            ret = self.SendOrder(
-                order_data["screen_name"],
-                order_data["screen_no"],
-                order_data["acc_no"],
-                order_data["order_type"],
-                order_data["code"],
-                order_data["qty"],
-                order_data["price"],
-                order_data["hoga_gb"],
-                order_data["org_order_no"]
-            )
-            
-            if ret == 0:
-                self._logger.info(f"주문 전송 성공: {order_data['code']}, {order_data['qty']}주")
-
-                return {
-                        "success": True,
-                        "order_id": order_id,
-                        "message": "주문이 접수되었습니다",
-                        "return_code": ret
-                    }
-            else:
-                error_msg = self._get_error_message(ret)
-                return {
-                    "success": False,
-                    "error": f"주문 전송 실패: {error_msg} (코드: {ret})",
-                    "return_code": ret
-                }
-                
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"주문 실행 오류: {str(e)}"
-            }
-        
 
     def _get_error_message(self, error_code: int) -> str:
         """키움 API 에러 코드를 한국어 메시지로 변환"""
@@ -376,42 +301,42 @@ class KiwoomComponent(QAxWidget):
     def login(self) -> bool:
         """키움 API 로그인"""
         try:
-            self._logger.info("키움 API 로그인 시작")
+            logger.info("키움 API 로그인 시작")
             
             if self._is_connected:
-                self._logger.info("이미 로그인 상태입니다")
+                logger.info("이미 로그인 상태입니다")
                 return True
 
             self._login_event_loop = QEventLoop()
             ret = self.dynamicCall("CommConnect()")
-            self._logger.info(f"CommConnect() 결과: {ret}")
+            logger.info(f"CommConnect() 결과: {ret}")
             
             if ret == 0:
-                self._logger.info("로그인 창 대기 중...")
+                logger.info("로그인 창 대기 중...")
                 self._login_event_loop.exec_()
                 return self._is_connected
             else:
-                self._logger.error(f"로그인 요청 실패: {ret}")
+                logger.error(f"로그인 요청 실패: {ret}")
                 return False
                 
         except Exception as e:
-            self._logger.error(f"로그인 호출 오류: {e}")
+            logger.error(f"로그인 호출 오류: {e}")
             return False
 
     def _event_connect(self, err_code: int) -> None:
         """로그인 결과 이벤트 처리"""
-        self._logger.info(f"로그인 결과: {err_code}")
+        logger.info(f"로그인 결과: {err_code}")
         
         try:
             if err_code == 0:
                 self._is_connected = True
-                self._logger.info("로그인 성공!")
+                logger.info("로그인 성공!")
                 self._collect_user_info()
             else:
                 self._is_connected = False
-                self._logger.error(f"로그인 실패: {err_code}")
+                logger.error(f"로그인 실패: {err_code}")
         except Exception as e:
-            self._logger.error(f"로그인 이벤트 처리 오류: {e}")
+            logger.error(f"로그인 이벤트 처리 오류: {e}")
         finally:
             if self._login_event_loop:
                 self._login_event_loop.exit()
@@ -425,11 +350,11 @@ class KiwoomComponent(QAxWidget):
                 "accounts": self.dynamicCall("GetLoginInfo(QString)", "ACCNO")
             }
             
-            self._logger.info(f"사용자: {self._user_info['user_name']} ({self._user_info['user_id']})")
-            self._logger.info(f"계좌: {self._user_info['accounts']}")
+            logger.info(f"사용자: {self._user_info['user_name']} ({self._user_info['user_id']})")
+            logger.info(f"계좌: {self._user_info['accounts']}")
             
         except Exception as e:
-            self._logger.error(f"사용자 정보 조회 오류: {e}")
+            logger.error(f"사용자 정보 조회 오류: {e}")
 
     async def request_tr(self, tr_code: str, inputs: Dict[str, str], 
                        callback: Optional[Callable] = None, 
@@ -437,7 +362,7 @@ class KiwoomComponent(QAxWidget):
         """개선된 TR 요청 메서드 - 고유 식별자 사용"""
         try:
             if not self._is_connected:
-                self._logger.error("키움 API에 로그인되지 않음")
+                logger.error("키움 API에 로그인되지 않음")
                 return None
             
             # 입력값 설정
@@ -448,19 +373,6 @@ class KiwoomComponent(QAxWidget):
             # 요청 정보 저장
             request_info = self._tr_manager.create_request(tr_code, inputs, callback)
 
-            # {
-            #     "request_id": unique_id,
-            #     "tr_code": tr_code,
-            #     "screen_no": screen_no,
-            #     "inputs": inputs,
-            #     "callback": callback,
-            #     "timestamp": time.time(),
-            #     "event_loop": QEventLoop(),
-            #     "timeout_timer": QTimer(),
-            #     "completed": False,
-            #     "result": None
-            # }
-            
             # 요청 매핑 테이블에 저장
             self._pending_tr_requests[request_info.get("request_id")] = request_info
             
@@ -481,7 +393,7 @@ class KiwoomComponent(QAxWidget):
             )
             
             if ret == 0:
-                self._logger.info(f"{tr_code} 요청 전송 성공: {request_info.get('request_id')}")
+                logger.info(f"{tr_code} 요청 전송 성공: {request_info.get('request_id')}")
                 
                 # 이벤트 루프에서 대기
                 request_info["event_loop"].exec_()
@@ -491,12 +403,12 @@ class KiwoomComponent(QAxWidget):
                 self._cleanup_tr_request(request_info.get("request_id"))
                 return result
             else:
-                self._logger.error(f"{tr_code} 요청 실패: {ret}")
+                logger.error(f"{tr_code} 요청 실패: {ret}")
                 self._cleanup_tr_request(request_info.get("request_id"))
                 return None
                 
         except Exception as e:
-            self._logger.error(f"TR 요청 오류: {e}")
+            logger.error(f"TR 요청 오류: {e}")
             if 'request_info' in locals():
                 self._cleanup_tr_request(request_info.get("request_id"))
             return None
@@ -505,43 +417,37 @@ class KiwoomComponent(QAxWidget):
 
     def _on_request_timeout(self) -> None:
         """요청 타임아웃 처리"""
-        self._logger.warning("TR 요청 타임아웃")
+        logger.warning("TR 요청 타임아웃")
         if self._request_event_loop:
             self._request_event_loop.exit()
 
     def _receive_tr_data(self, screen_no, rq_name, tr_code, record_name, prev_next, data_len, err_code, msg1, msg2):
         """개선된 TR 데이터 수신 처리 - 고유 ID 매핑"""
         try:
-            self._logger.info(f"TR 응답 수신: rq_name={rq_name}, tr_code={tr_code}, screen_no={screen_no}")
-            
             # 요청 매핑 테이블에서 해당 요청 찾기
             request_info = self._pending_tr_requests.get(rq_name)
 
-            self._logger.info(f"@@@@ {self._pending_orders}")
-            # if request_info :
-            #     request_info = self._pending_orders.get(rq_name)
-            
             if not request_info:
-                self._logger.warning(f"매핑되지 않은 TR 응답: {rq_name}")
+                logger.warning(f"매핑되지 않은 TR 응답: {rq_name}")
                 return
             
             # 이미 완료된 요청인지 확인
             if request_info["completed"]:
-                self._logger.warning(f"이미 완료된 요청의 중복 응답: {rq_name}")
+                logger.warning(f"이미 완료된 요청의 중복 응답: {rq_name}")
                 return
             
             # 에러 코드 확인
             error_code = int(err_code) if isinstance(err_code, str) and err_code.strip() else int(err_code or 0)
             
             if error_code != 0:
-                self._logger.error(f"TR 에러 - 요청: {rq_name}, 코드: {error_code}, 메시지: {msg1}")
+                logger.error(f"TR 에러 - 요청: {rq_name}, 코드: {error_code}, 메시지: {msg1}")
                 request_info["result"] = {"error": f"TR 에러: {error_code} - {msg1}"}
             else:
                 # 데이터 추출 및 파싱
                 raw_data = self._extract_raw_data(tr_code, record_name or "")
                 
                 request_info["result"] = raw_data
-                self._logger.info(f"TR 데이터 처리 완료: {rq_name}")
+                logger.info(f"TR 데이터 처리 완료: {rq_name}")
             
             # 요청 완료 처리
             request_info["completed"] = True
@@ -551,14 +457,14 @@ class KiwoomComponent(QAxWidget):
                 try:
                     request_info["callback"](request_info["result"])
                 except Exception as e:
-                    self._logger.error(f"콜백 실행 오류: {e}")
+                    logger.error(f"콜백 실행 오류: {e}")
             
             # 이벤트 루프 종료
             if request_info["event_loop"].isRunning():
                 request_info["event_loop"].exit()
                 
         except Exception as e:
-            self._logger.error(f"TR 데이터 처리 오류: {e}")
+            logger.error(f"TR 데이터 처리 오류: {e}")
             # 에러 발생 시에도 이벤트 루프 종료
             if rq_name in self._pending_tr_requests:
                 request_info = self._pending_tr_requests[rq_name]
@@ -567,7 +473,7 @@ class KiwoomComponent(QAxWidget):
 
     def _handle_tr_timeout(self, request_id: str) -> None:
         """TR 요청 타임아웃 처리"""
-        self._logger.warning(f"TR 요청 타임아웃: {request_id}")
+        logger.warning(f"TR 요청 타임아웃: {request_id}")
         
         request_info = self._pending_tr_requests.get(request_id)
         if request_info and not request_info["completed"]:
@@ -587,18 +493,18 @@ class KiwoomComponent(QAxWidget):
             
             # 매핑 테이블에서 제거
             del self._pending_tr_requests[request_id]
-            self._logger.debug(f"TR 요청 정리 완료: {request_id}")
+            logger.debug(f"TR 요청 정리 완료: {request_id}")
 
     def _extract_raw_data(self, tr_code: str, record_name: str) -> Dict[str, str]:
         """원시 데이터 추출 - 모든 가능한 필드 추출"""
         raw_data = []
         
         config = self._tr_manager._tr_configs.get(tr_code, {})
-        self._logger.info(f"config {config}")
+        logger.info(f"config {config}")
         field_names = list(config.get("outputs", {}).keys())
         
         nCnt = self.dynamicCall("GetRepeatCnt(QString, QString)", tr_code, "");
-        self._logger.info(f"nCnt : {nCnt}")
+        logger.info(f"nCnt : {nCnt}")
 
         for i in range(max(1, nCnt)):
             for field_name in field_names:
@@ -610,8 +516,8 @@ class KiwoomComponent(QAxWidget):
                         int(i), 
                         str(field_name)
                     )
-                    self._logger.info(f"field_name : {field_name}, tr_code : {tr_code}, record_name : {record_name}")
-                    self._logger.info(f"value : {value}")
+                    logger.info(f"field_name : {field_name}, tr_code : {tr_code}, record_name : {record_name}")
+                    logger.info(f"value : {value}")
                         # None 체크 및 문자열 정제
                     clean_value = value.strip() if value else ""
 
@@ -622,7 +528,7 @@ class KiwoomComponent(QAxWidget):
                     raw_data[i][field_name] = clean_value
                         
                 except Exception as e:
-                    self._logger.warning(f"{field_name} 데이터 추출 실패: {e}")
+                    logger.warning(f"{field_name} 데이터 추출 실패: {e}")
                     raw_data[f"{field_name}_{i}"] = ""
 
         return raw_data
@@ -630,7 +536,7 @@ class KiwoomComponent(QAxWidget):
     # 편의 메서드들
     async def get_stock_info(self, stock_code: str) -> Optional[Dict[str, Any]]:
         """주식 기본정보 조회"""
-        self._logger.info(f"주식 기본정보 조회: {stock_code}")
+        logger.info(f"주식 기본정보 조회: {stock_code}")
         return await self.request_tr("opt10001", {"종목코드": stock_code})
 
     def get_stock_kospi(self, stock: str) -> Optional[str]:
@@ -647,7 +553,7 @@ class KiwoomComponent(QAxWidget):
                         return code
             return None
         except Exception as e:
-            self._logger.error(f"코스피 종목 조회 오류: {e}")
+            logger.error(f"코스피 종목 조회 오류: {e}")
             return None
 
 
@@ -660,30 +566,12 @@ class KiwoomComponent(QAxWidget):
             if not self._is_connected:
                 return {"success": False, "error": "키움 API에 로그인되지 않았습니다"}
 
-            # 고유 주문 ID 생성
-            # order_id = f"ORDER_{uuid.uuid4().hex[:8]}"
-            
-            # # 이벤트 루프 및 타이머 설정
-            # event_loop = QEventLoop()
-            # timeout_timer = QTimer()
-            
-            # self._order_event_loops[order_id] = event_loop
-            # self._order_timeouts[order_id] = timeout_timer
-            
             # 주문 매핑 정보 저장
             order_mapping = self._order_manager.create_order_request(code)
-            # {
-            #     "order_id": order_id,
-            #     "screen_no": screen_no,
-            #     "code": code,
-            #     "event_loop": event_loop,
-            #     "timeout_timer": timeout_timer,
-            #     "completed": False,
-            #     "result": None
-            # }
-            self._logger.info(f"order_mapping {order_mapping}")
-            self._logger.info(f"order_mapping {order_mapping.get('order_id')}")
-            self._logger.info(f"order_mapping {order_mapping['order_id']}")
+            
+            logger.info(f"order_mapping {order_mapping}")
+            logger.info(f"order_mapping {order_mapping.get('order_id')}")
+            logger.info(f"order_mapping {order_mapping['order_id']}")
             self._pending_orders[order_mapping.get('order_id')] = order_mapping
             
             # 타임아웃 설정
@@ -691,25 +579,25 @@ class KiwoomComponent(QAxWidget):
             order_mapping.get('timeout_timer').timeout.connect(lambda: self._handle_order_timeout(order_mapping.get('order_id')))
             order_mapping.get('timeout_timer').start(timeout * 1000)
 
-            self._logger.info(f"주문 전송: {code} {qty}주, 주문ID: {order_mapping.get('order_id')}")
+            logger.info(f"주문 전송: {code} {qty}주, 주문ID: {order_mapping.get('order_id')}")
 
-            self._logger.info(f"screen_name: {screen_name}, screen_no: {order_mapping.get('screen_no')}, acc_no: {acc_no}, order_type: {order_type}, code: {code}, qty: {qty}, price: {price}, hoga_gb: {hoga_gb}, org_order_no: {org_order_no}")
+            logger.info(f"screen_name: {screen_name}, screen_no: {order_mapping.get('screen_no')}, acc_no: {acc_no}, order_type: {order_type}, code: {code}, qty: {qty}, price: {price}, hoga_gb: {hoga_gb}, org_order_no: {org_order_no}")
             # SendOrder 호출
             ret = self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)", 
                 [screen_name, order_mapping.get('screen_no'), acc_no, order_type, code, qty, price, hoga_gb, org_order_no]
             )
-            self._logger.info(f"ret {ret}")
+            logger.info(f"ret {ret}")
             
             if ret == 0:
-                self._logger.info(f"주문 전송 성공 - 결과 대기 중: {order_mapping.get('order_id')}")
+                logger.info(f"주문 전송 성공 - 결과 대기 중: {order_mapping.get('order_id')}")
                 
                 # QEventLoop로 결과 대기
                 order_mapping['event_loop'].exec_()
 
-                self._logger.info(f"이벤트루프 종료")
+                logger.info(f"이벤트루프 종료")
 
                 # 결과 반환
-                self._logger.info(f"order_mapping {order_mapping}")
+                logger.info(f"order_mapping {order_mapping}")
                 result = order_mapping.get("result", {"error": "결과 없음"})
                 self._cleanup_order_request(order_mapping.get('order_id'))
                 return result
@@ -724,29 +612,23 @@ class KiwoomComponent(QAxWidget):
                 }
                 
         except Exception as e:
-            self._logger.error(f"주문 전송 오류: {e}")
+            logger.error(f"주문 전송 오류: {e}")
             if 'order_mapping' in locals():
                 self._cleanup_order_request(order_mapping.get('order_id'))
             return {"success": False, "error": str(e)}
         
     def _receive_msg(self, screen_no: str, rq_name: str, tr_code: str, msg: str) -> None:
         """주문 메시지 수신 - QEventLoop 종료 처리"""
-        self._logger.info(f"📨 주문 메시지: {msg} (화면번호: {screen_no})")
-        self._logger.info(f"_pending_orders: {self._pending_orders}")
+        logger.info(f"📨 주문 메시지: {msg} (화면번호: {screen_no})")
+        logger.info(f"_pending_orders: {self._pending_orders}")
         
 
         # 해당 화면번호의 주문 찾기
         for order_id, order_info in self._pending_orders.items():
-            self._logger.info("@@1")
-            self._logger.info(f"@@1 {order_id}")
-            self._logger.info(f"@@1 {order_info}")
-            self._logger.info(f"@@1 {order_info.get('screen_no')}")
-            self._logger.info(f"@@1 {screen_no}")
             if (order_info.get("screen_no") == screen_no and 
                 not order_info.get("completed", False)):
-                
 
-                self._logger.info("@@2")
+                logger.info("@@2")
                 # 결과 저장
                 result = {
                     "success": True,
@@ -763,14 +645,14 @@ class KiwoomComponent(QAxWidget):
                 event_loop = order_info["event_loop"]
                 if event_loop and event_loop.isRunning():
                     event_loop.exit()
-                    self._logger.info(f"✅ 주문 메시지 수신 완료: {order_id}")
+                    logger.info(f"✅ 주문 메시지 수신 완료: {order_id}")
                 
                 break
 
     def _receive_chejan_data(self, gubun: str, item_cnt: int, fid_list: str) -> None:
         """체결 데이터 수신 - QEventLoop 종료 처리"""
         try:
-            self._logger.info(f"🔥 체결 데이터 수신! 구분: {gubun}")
+            logger.info(f"🔥 체결 데이터 수신! 구분: {gubun}")
             
             if gubun == "0":  # 주문체결
                 # 체결 데이터 추출
@@ -783,7 +665,7 @@ class KiwoomComponent(QAxWidget):
                 exec_qty = self._safe_get_chejan_data(911, "체결수량")
                 exec_price = self._safe_get_chejan_data(910, "체결가")
                 
-                self._logger.info(f"체결 정보: {stock_name}({stock_code}) {order_status} {exec_qty}주 @ {exec_price}원")
+                logger.info(f"체결 정보: {stock_name}({stock_code}) {order_status} {exec_qty}주 @ {exec_price}원")
                 
                 # 해당 종목의 주문 찾기
                 for order_id, order_info in self._pending_orders.items():
@@ -812,12 +694,12 @@ class KiwoomComponent(QAxWidget):
                         event_loop = order_info["event_loop"]
                         if event_loop and event_loop.isRunning():
                             event_loop.exit()
-                            self._logger.info(f"✅ 체결 데이터 수신 완료: {order_id}")
+                            logger.info(f"✅ 체결 데이터 수신 완료: {order_id}")
                         
                         break
                         
         except Exception as e:
-            self._logger.error(f"체결 데이터 처리 오류: {e}")
+            logger.error(f"체결 데이터 처리 오류: {e}")
 
     def _safe_get_chejan_data(self, fid: int, field_name: str) -> str:
         """안전한 체결 데이터 추출"""
@@ -825,12 +707,12 @@ class KiwoomComponent(QAxWidget):
             value = self.dynamicCall("GetChejanData(int)", fid)
             return str(value).strip() if value else ""
         except Exception as e:
-            self._logger.warning(f"{field_name}({fid}) 추출 실패: {e}")
+            logger.warning(f"{field_name}({fid}) 추출 실패: {e}")
             return ""
 
     def _handle_order_timeout(self, order_id: str) -> None:
         """주문 타임아웃 처리"""
-        self._logger.warning(f"주문 결과 대기 타임아웃: {order_id}")
+        logger.warning(f"주문 결과 대기 타임아웃: {order_id}")
         
         order_info = self._pending_orders.get(order_id)
         if order_info and not order_info.get("completed", False):
@@ -859,7 +741,7 @@ class KiwoomComponent(QAxWidget):
             
             # 매핑 테이블에서 제거
             del self._pending_orders[order_id]
-            self._logger.debug(f"주문 요청 정리 완료: {order_id}")
+            logger.debug(f"주문 요청 정리 완료: {order_id}")
 
     async def send_order(self, screen_name: str, acc_no: str, 
                         order_type: int, code: str, qty: int, price: int, 
@@ -869,37 +751,12 @@ class KiwoomComponent(QAxWidget):
             if not self._is_connected:
                 return {"success": False, "error": "키움 API에 로그인되지 않았습니다"}
             
-            # loop = asyncio.get_event_loop()
-            # result = await loop.run_in_executor(
-            #     None,  # 기본 ThreadPoolExecutor 사용
-            #     self.send_order_sync,
-            #     screen_name, screen_no, acc_no, order_type, 
-            #     code, qty, price, hoga_gb, org_order_no
-            # )
-
             result = self.send_order_sync(screen_name, acc_no, order_type, code, qty, price, hoga_gb, org_order_no)
-            self._logger.info(f"send_order result {result}")
+            logger.info(f"send_order result {result}")
             return result
         
-            # order_data = {
-            #     "screen_name": screen_name,
-            #     "screen_no": screen_no,
-            #     "acc_no": acc_no,
-            #     "order_type": order_type,
-            #     "code": code,
-            #     "qty": qty,
-            #     "price": price,
-            #     "hoga_gb": hoga_gb,
-            #     "org_order_no": org_order_no
-            # }
-
-            # self._pending_orders[order_id] = order_data
-            # # 비동기 주문 제출
-            # result = await self._order_manager.submit_order(order_data)
-            # return result
-            
         except Exception as e:
-            self._logger.error(f"주문 전송 오류: {e}")
+            logger.error(f"주문 전송 오류: {e}")
             return {"success": False, "error": str(e)}
 
     @property
@@ -929,7 +786,7 @@ class KiwoomComponent(QAxWidget):
             elif isinstance(current_time, time.struct_time):
                 now = datetime.datetime(*current_time[0:6])  # struct_time은 튜플처럼 인덱싱 가능
             else:
-                self._logger.warning(f"예상치 못한 시간 타입: {type(current_time)}, 현재 시간 사용")
+                logger.warning(f"예상치 못한 시간 타입: {type(current_time)}, 현재 시간 사용")
                 now = datetime.datetime.now()
             
             # 주말 확인 (토요일=5, 일요일=6)
@@ -943,7 +800,7 @@ class KiwoomComponent(QAxWidget):
             return {"status": True, "message": "장 운영 중", "is_open": marketOpen <= now <= marketClose}
 
         except Exception as e:
-            self._logger.error(f"장 운영 시간 확인 오류: {e}")
+            logger.error(f"장 운영 시간 확인 오류: {e}")
             # 오류 발생시 현재 시간 기준으로 재시도
             return self._isMarketOpen(None)
 
@@ -1009,7 +866,7 @@ class KiwoomComponent(QAxWidget):
         """키움 API를 통한 실제 장 운영 상태 확인"""
         try:
             if not self._is_connected:
-                self._logger.warning("키움 API 미연결 상태 - 시간 기반 판단 사용")
+                logger.warning("키움 API 미연결 상태 - 시간 기반 판단 사용")
                 return self._is_market_open()
             
             # 키움 API 장 운영 상태 조회 (GetCodeListByMarket 응답으로 간접 확인)
@@ -1020,14 +877,14 @@ class KiwoomComponent(QAxWidget):
                 time_based_status = self._is_market_open()
                 market_status = self._get_market_status()
                 
-                self._logger.info(f"장 운영 상태: {market_status['status_message']} ({market_status['current_time']})")
+                logger.info(f"장 운영 상태: {market_status['status_message']} ({market_status['current_time']})")
                 return time_based_status
             else:
-                self._logger.warning("키움 API 응답 이상 - 시간 기반 판단 사용")
+                logger.warning("키움 API 응답 이상 - 시간 기반 판단 사용")
                 return self._is_market_open()
                 
         except Exception as e:
-            self._logger.error(f"장 운영 상태 확인 오류: {e}")
+            logger.error(f"장 운영 상태 확인 오류: {e}")
             return self._is_market_open()
 # 싱글톤 인스턴스 생성
 kiwoom_component = KiwoomComponent()
