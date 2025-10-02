@@ -518,8 +518,8 @@ class KiwoomComponent(QAxWidget):
             request_info = self._pending_tr_requests.get(rq_name)
 
             self._logger.info(f"@@@@ {self._pending_orders}")
-            if request_info :
-                request_info = self._pending_orders.get(rq_name)
+            # if request_info :
+            #     request_info = self._pending_orders.get(rq_name)
             
             if not request_info:
                 self._logger.warning(f"매핑되지 않은 TR 응답: {rq_name}")

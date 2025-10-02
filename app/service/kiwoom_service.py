@@ -44,7 +44,7 @@ class KiwoomService:
                 return {"error": "사용 가능한 계좌가 없습니다."}
             
             primary_account = accountList[0]
-            self._logger.info(f"주문 계좌: {primary_account}")
+            self._logger.info(f"주문 계좌: {primary_account}") 
             
             # 주문 실행 (동기 메서드이므로 await 제거)
                 # 거래시간 확인
@@ -85,13 +85,17 @@ class KiwoomService:
                 return {
                     "success": True, 
                     "message": result.get("message"),
-                    "orderResult": result,
+                    "order_id": result.get("order_id"),
+                    "type": result.get("type"),
+                    "screen_no": result.get("screen_no"),
                     "stock_code": stock_code,
                     "quantity": quantity,
-                    "price": price
+                    "price": price,
+                    "orderResult": result
                 }
             else:
                 return {
+                    "success": False,
                     "error": f"주문 실패 ",
                     "orderResult": result
                 }

@@ -79,7 +79,6 @@ async def order_stock(
         return {
             "success": True,
             "data": order_result,
-            "message": f"{symbol} 주식 {order_type} 주문이 성공적으로 접수되었습니다."
         }
         
     except HTTPException:
